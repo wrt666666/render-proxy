@@ -38,6 +38,9 @@ wss.on('connection', (ws, req) => {
   const onHeader = (data) => {
     buffer = Buffer.concat([buffer, data]);
     if (buffer.length < 21) return;
+    console.log(`header bytes(21): ${buffer.slice(0, 21).toString('hex')}`);
+    console.log(`buffer[0]=${buffer[0]} buffer[1..16]=${buffer.slice(1, 17).toString('hex')}`);
+    console.log(`serverUUID=${serverUUID.toString('hex')}`);
 
     // VLESS v4 header: version(1) + uuid(16) + addr_type(1) + addr(N) + port(2) + cmd(1)
     // Verify UUID at [1..16]
