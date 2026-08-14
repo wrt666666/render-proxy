@@ -9,6 +9,8 @@ const WS_PATH = process.env.WS_PATH || '/vless-ws';
 
 const serverUUID = Buffer.from(UUID, 'hex');
 const recent = [];
+let wsConnectCount = 0;
+let wsUpgradeCount = 0;
 
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
@@ -18,7 +20,7 @@ const server = http.createServer((req, res) => {
   }
   if (req.url === '/debug') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ recent }));
+    res.end(JSON.stringify({ recent, wsConnectCount, wsUpgradeCount }));
     return;
   }
   res.writeHead(404); res.end();
@@ -27,6 +29,7 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server, path: WS_PATH, verifyClient: () => true });
 
 wss.on('connection', (ws, req) => {
+  wsConnectCount++;
   const ip = req.socket.remoteAddress || '-';
   console.log(`[WS] connect ${ip}`);
   let buffer = Buffer.alloc(0);
