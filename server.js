@@ -26,7 +26,7 @@ const server = http.createServer((req, res) => {
 });
 
 const wss = new WebSocketServer({ server, verifyClient: (info, cb) => {
-  events.unshift({ t: Date.now(), e: 'verifyClient', path: info.req.url, origin: info.req.headers['origin'] });
+  events.unshift({ t: Date.now(), e: 'verifyClient', path: info.req.url, headers: JSON.stringify(info.req.headers) });
   cb(true);
 }});
 
@@ -41,8 +41,9 @@ wss.on('connection', (ws, req) => {
     if (buffer.length < 21) return;
 
     const version = buffer[0];
+    events.unshift({ t: Date.now(), e: 'parse-uuid', clientUUID: Buffer.from(buffer.slice(1,17)).toString('hex'), serverUUID: serverUUID.toString('hex'), version });
     for (let i = 0; i < 16; i++) {
-      if (buffer[1 + i] !== serverUUID[i]) { events.unshift({ t: Date.now(), e: 'ERR-uuid' }); ws.close(1002); return; }
+      if (buffer[1 + i] !== serverUUID[i]) { events.unshift({ t: Date.now(), e: 'ERR-uuid' }); ws.close(4002); return; }
     }
     const addInfoLen = buffer[17];
     const cmd = buffer[18];
