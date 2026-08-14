@@ -27,11 +27,11 @@ const server = http.createServer((req, res) => {
   res.writeHead(404); res.end();
 });
 
-const wss = new WebSocketServer({ server, path: WS_PATH, verifyClient: () => true });
+const wss = new WebSocketServer({ server, verifyClient: () => true });
 
 wss.on('connection', (ws, req) => {
   wsConnectCount++;
-  recent.unshift({ ts: new Date().toISOString(), event: 'ws-connect', path: req.url, origin: req.headers['origin'], sec_ws_protocol: req.headers['sec-websocket-protocol'] });
+  recent.unshift({ ts: new Date().toISOString(), event: 'ws-connect', path: req.url, origin: req.headers['origin'] });
   const ip = req.socket.remoteAddress || '-';
   console.log(`[WS] connect ${ip}`);
   let buffer = Buffer.alloc(0);
