@@ -14,6 +14,9 @@ let wsUpgradeCount = 0;
 
 const server = http.createServer((req, res) => {
   wsUpgradeCount++;
+  if ((req.headers['upgrade'] || '').toLowerCase() === 'websocket') {
+    recent.unshift({ ts: new Date().toISOString(), event: 'ws-upgrade-http', url: req.url, origin: req.headers['origin'] });
+  }
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', uuid: UUID, path: WS_PATH, timestamp: new Date().toISOString() }));
