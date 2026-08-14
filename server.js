@@ -27,7 +27,7 @@ wss.on('connection', (ws, req) => {
 
   function onRaw(data) {
     buffer = Buffer.concat([buffer, data]);
-    // VLESS v4 wire format (verified against v2ray-core / vless-proxy-agent):
+    // VLESS v4 wire format (verified against v2ray-core):
     // version(1) + uuid(16) + addInfoLen(1) + cmd(1) + port(2) + addrType(1) + addr(var) + addInfo(addInfoLen)
     if (buffer.length < 21) return;
 
