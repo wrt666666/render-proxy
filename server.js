@@ -12,7 +12,8 @@ const serverUUID = Buffer.from(UUID, 'hex');
 const events = [];
 
 const server = http.createServer((req, res) => {
-  events.unshift({ t: Date.now(), e: 'http', url: req.url });
+  const proto = req.socket && req.socket.getProtocol ? req.socket.getProtocol() : 'no-alpn-func';
+  events.unshift({ t: Date.now(), e: 'http', url: req.url, ua: req.headers['user-agent'], proto, upgrade: req.headers['upgrade'] });
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -28,10 +29,14 @@ const server = http.createServer((req, res) => {
   res.writeHead(404); res.end();
 });
 
-const wss = new WebSocketServer({ server, verifyClient: (info, cb) => {
-  events.unshift({ t: Date.now(), e: 'verifyClient', path: info.req.url, headers: JSON.stringify(info.req.headers) });
-  cb(true);
-}});
+const wss = new WebSocketServer({
+  server,
+  handleProtocols: (req, available) => available[0],
+  verifyClient: (info, cb) => {
+    events.unshift({ t: Date.now(), e: 'verifyClient', url: info.req.url, ua: info.req.headers['user-agent'], swsproto: info.req.headers['sec-websocket-protocol'], proto: info.req.socket && info.req.socket.encrypted ? info.req.socket.getProtocol && info.req.socket.getProtocol() : '?' });
+    cb(true);
+  }
+});
 
 wss.on('connection', (ws, req) => {
   events.unshift({ t: Date.now(), e: 'ws-connect', path: req.url, origin: req.headers['origin'] });
