@@ -37,24 +37,26 @@ wss.on('connection', (ws, req) => {
 
   const onHeader = (data) => {
     buffer = Buffer.concat([buffer, data]);
-    if (buffer.length < 20) return;
+    if (buffer.length < 21) return;
 
-    // UUID match
+    // VLESS v4 header: version(1) + uuid(16) + addr_type(1) + addr(N) + port(2) + cmd(1)
+    // Verify UUID at [1..16]
+    const version = buffer[0];
     for (let i = 0; i < 16; i++) {
-      if (buffer[i] !== serverUUID[i]) {
+      if (buffer[1 + i] !== serverUUID[i]) {
         ws.close(1002, 'UUID mismatch');
         return;
       }
     }
 
-    const addrType = buffer[16];
+    const addrType = buffer[17];
     let addrLen;
     if (addrType === 1) addrLen = 4;
-    else if (addrType === 2) addrLen = 1 + buffer[17];
+    else if (addrType === 2) addrLen = 1 + buffer[18];
     else if (addrType === 3) addrLen = 16;
     else { ws.close(1002, 'Bad addr type'); return; }
 
-    const portStart = 17 + addrLen;
+    const portStart = 18 + addrLen;
     if (buffer.length < portStart + 3) return;
 
     const port = buffer[portStart] * 256 + buffer[portStart + 1];
@@ -62,13 +64,13 @@ wss.on('connection', (ws, req) => {
 
     let addr;
     if (addrType === 1) {
-      addr = `${buffer[17]}.${buffer[18]}.${buffer[19]}.${buffer[20]}`;
+      addr = `${buffer[18]}.${buffer[19]}.${buffer[20]}.${buffer[21]}`;
     } else if (addrType === 2) {
-      addr = buffer.slice(18, 18 + buffer[17]).toString('utf8');
+      addr = buffer.slice(19, 19 + buffer[18]).toString('utf8');
     } else {
       const parts = [];
       for (let i = 0; i < 8; i++) {
-        parts.push(((buffer[17 + i * 2]) * 256 + buffer[18 + i * 2]).toString(16));
+        parts.push(((buffer[18 + i * 2]) * 256 + buffer[19 + i * 2]).toString(16));
       }
       addr = parts.join(':');
     }
