@@ -31,16 +31,16 @@ const wss = new WebSocketServer({ server, path: WS_PATH, verifyClient: () => tru
 
 wss.on('connection', (ws, req) => {
   wsConnectCount++;
+  recent.unshift({ ts: new Date().toISOString(), event: 'ws-connect', path: req.url, origin: req.headers['origin'], sec_ws_protocol: req.headers['sec-websocket-protocol'] });
   const ip = req.socket.remoteAddress || '-';
   console.log(`[WS] connect ${ip}`);
   let buffer = Buffer.alloc(0);
 
   function onRaw(data) {
+    console.log('  onRaw! len=' + data.length + ' hex=' + data.toString('hex'));
     buffer = Buffer.concat([buffer, data]);
-    // Log raw header hex for first 32 bytes on every connection
-    if (buffer.length >= 4 && recent.length < 20) {
-      recent.unshift({ ts: new Date().toISOString(), hex: buffer.slice(0, 32).toString('hex'), len: buffer.length });
-      console.log(`  raw hex (first 32): ${buffer.slice(0, 32).toString('hex')}`);
+    if (buffer.length < 4 && recent.length < 20) {
+      recent.unshift({ ts: new Date().toISOString(), hex: buffer.toString('hex'), len: buffer.length });
     }
     if (buffer.length < 21) return;
 
