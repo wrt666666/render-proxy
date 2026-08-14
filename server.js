@@ -71,7 +71,7 @@ wss.on('connection', (ws, req) => {
 
     console.log(`  → ${addr}:${port} cmd=${cmd} ver=${version}`);
     // VLESS response: 1 byte version only (verified against vless-proxy-agent)
-    ws.send(Buffer.from([version]), { binary: true });
+    ws.send(Buffer.from([version, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]), { binary: true });
 
     const dest = net.connect(port, addr, () => { if (remaining && remaining.length > 0) dest.write(remaining); });
     dest.on('data', (c) => { if (ws.readyState === 1) ws.send(c, { binary: true }); });
