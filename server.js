@@ -1,89 +1,114 @@
 const http = require('http');
-const httpProxy = require('http-proxy');
-const { URL } = require('url');
+const { WebSocketServer } = require('ws');
+const crypto = require('crypto');
+const net = require('net');
 
-const proxy = httpProxy.createProxyServer({ ws: true });
 const PORT = process.env.PORT || 3000;
-const AUTH_TOKEN = process.env.AUTH_TOKEN || '';
-
-function getAuthToken(req) {
-  const auth = req.headers['authorization'];
-  if (!auth) return null;
-  if (auth.startsWith('Bearer ')) return auth.slice(7);
-  if (auth.startsWith('Basic ')) {
-    try {
-      const decoded = Buffer.from(auth.slice(6), 'base64').toString();
-      const parts = decoded.split(':');
-      return parts[1] || parts[0]; // password 或 username
-    } catch { return null; }
-  }
-  return null;
+const UUID = (process.env.UUID || crypto.randomUUID()).replace(/-/g, '');
+const WS_PATH = process.env.WS_PATH || '/vless-ws';
+const serverUUID = new Uint8Array(16);
+for (let i = 0; i < 32; i += 2) {
+  serverUUID[i >> 1] = parseInt(UUID.substr(i, 2), 16);
 }
 
-const server = http.createServer();
-
-server.on('request', (req, res) => {
-  // 健康检查
+const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'ok',
+      uuid: UUID,
+      path: WS_PATH,
       uptime: process.uptime(),
-      target: process.env.PROXY_TARGET,
       timestamp: new Date().toISOString()
     }));
     return;
   }
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'not found' }));
+});
 
-  // 认证检查
-  if (AUTH_TOKEN) {
-    const token = getAuthToken(req);
-    if (token !== AUTH_TOKEN) {
-      res.writeHead(401, { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Basic realm="proxy"' });
-      res.end(JSON.stringify({ error: 'Unauthorized' }));
-      return;
+const wss = new WebSocketServer({ server, path: WS_PATH });
+
+wss.on('connection', (ws, req) => {
+  const ip = req.socket.remoteAddress || '-';
+  console.log(`[${new Date().toISOString()}] WS connect from ${ip}`);
+
+  let buffer = Buffer.alloc(0);
+
+  const onHeader = (data) => {
+    buffer = Buffer.concat([buffer, data]);
+    if (buffer.length < 20) return;
+
+    // UUID match
+    for (let i = 0; i < 16; i++) {
+      if (buffer[i] !== serverUUID[i]) {
+        ws.close(1002, 'UUID mismatch');
+        return;
+      }
     }
-  }
 
-  // 支持 ?url= 参数指定目标
-  const parsed = new URL(req.url, `http://${req.headers.host}`);
-  const target = parsed.searchParams.get('url')
-    || process.env.PROXY_TARGET
-    || 'https://www.google.com';
+    const addrType = buffer[16];
+    let addrLen;
+    if (addrType === 1) addrLen = 4;
+    else if (addrType === 2) addrLen = 1 + buffer[17];
+    else if (addrType === 3) addrLen = 16;
+    else { ws.close(1002, 'Bad addr type'); return; }
 
-  // 记录日志
-  const ts = new Date().toISOString();
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  console.log(`[${ts}] ${req.method} ${req.url} -> ${target}  (from ${ip})`);
+    const portStart = 17 + addrLen;
+    if (buffer.length < portStart + 3) return;
 
-  proxy.web(req, res, {
-    target,
-    changeOrigin: true,
-    timeout: 30000
-  });
-});
+    const port = buffer[portStart] * 256 + buffer[portStart + 1];
+    const cmd = buffer[portStart + 2];
 
-// WebSocket 代理
-server.on('upgrade', (req, socket, head) => {
-  const parsed = new URL(req.url, `http://${req.headers.host}`);
-  const target = parsed.searchParams.get('url')
-    || process.env.PROXY_TARGET
-    || 'wss://localhost';
+    let addr;
+    if (addrType === 1) {
+      addr = `${buffer[17]}.${buffer[18]}.${buffer[19]}.${buffer[20]}`;
+    } else if (addrType === 2) {
+      addr = buffer.slice(18, 18 + buffer[17]).toString('utf8');
+    } else {
+      const parts = [];
+      for (let i = 0; i < 8; i++) {
+        parts.push(((buffer[17 + i * 2]) * 256 + buffer[18 + i * 2]).toString(16));
+      }
+      addr = parts.join(':');
+    }
 
-  proxy.ws(req, socket, head, { target });
-});
+    const consumed = portStart + 3;
+    const remaining = buffer.length > consumed ? buffer.slice(consumed) : null;
+    buffer = Buffer.alloc(0);
+    ws.removeListener('data', onHeader);
 
-proxy.on('error', (err, req, res) => {
-  console.error(`Proxy error: ${err.message}`);
-  if (!res.headersSent && req) {
-    res.writeHead(502, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Bad Gateway', message: err.message }));
-  }
+    // VLESS response header: version(0) + response(0) + flags(0) + reserved(2) + security(0)
+    ws.send(Buffer.from([0, 0, 0, 0, 0, 0]));
+
+    const dest = net.connect(port, addr, () => {
+      if (remaining && remaining.length > 0) dest.write(remaining);
+    });
+
+    dest.on('data', (chunk) => {
+      if (ws.readyState === 1) ws.send(chunk, { binary: true });
+    });
+    dest.on('end', () => { if (ws.readyState === 1) ws.close(); });
+    dest.on('error', (err) => {
+      console.error(`dest error: ${err.message}`);
+      ws.close(1011, 'dest error');
+    });
+
+    ws.on('data', (chunk) => { if (dest.writable) dest.write(chunk); });
+    ws.on('close', () => { if (dest.writable) dest.end(); });
+    ws.on('error', () => { if (dest.writable) dest.end(); });
+
+    console.log(`  -> ${addr}:${port} (cmd=${cmd})`);
+  };
+
+  ws.on('data', onHeader);
 });
 
 server.listen(PORT, () => {
-  console.log(`Proxy server on port ${PORT}`);
-  console.log(`Target: ${process.env.PROXY_TARGET || 'default'}`);
+  console.log(`════════════════════════════════════════`);
+  console.log(`  VLESS+WS proxy on port ${PORT}`);
+  console.log(`  UUID: ${UUID}`);
+  console.log(`  WS path: ${WS_PATH}`);
+  console.log(`  Health: /health`);
+  console.log(`════════════════════════════════════════`);
 });
-
-process.on('SIGTERM', () => { server.close(() => process.exit(0)); });
