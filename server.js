@@ -72,13 +72,20 @@ wss.on('connection', (ws, req) => {
     buffer = Buffer.alloc(0);
     ws.removeListener('message', onMsg);
 
-    events.unshift({ t: Date.now(), e: 'ok', target: addr + ':' + port });
+    events.unshift({ t: Date.now(), e: 'ok', target: addr + ':' + port, cmd: cmd });
     ws.send(Buffer.from([version, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]), { binary: true });
 
-    const dest = net.connect(port, addr, () => { if (remaining) dest.write(remaining); });
-    dest.on('data', (c) => { if (ws.readyState === 1) ws.send(c, { binary: true }); });
+    events.unshift({ t: Date.now(), e: 'connecting' });
+    const dest = net.connect(port, addr, () => {
+      events.unshift({ t: Date.now(), e: 'dest-connected', target: addr + ':' + port });
+      if (remaining) dest.write(remaining);
+    });
+    dest.on('data', (c) => {
+      events.unshift({ t: Date.now(), e: 'dest-data', len: c.length, hex: c.slice(0, 16).toString('hex') });
+      if (ws.readyState === 1) ws.send(c, { binary: true });
+    });
     dest.on('error', (e) => { events.unshift({ t: Date.now(), e: 'dest-err', msg: e.message }); ws.close(1011); });
-    dest.on('end', () => { if (ws.readyState === 1) ws.close(); });
+    dest.on('end', () => { events.unshift({ t: Date.now(), e: 'dest-end' }); if (ws.readyState === 1) ws.close(); });
 
     ws.on('message', (c) => { if (dest.writable) dest.write(Buffer.isBuffer(c) ? c : Buffer.from(c)); });
     ws.on('close', () => { events.unshift({ t: Date.now(), e: 'ws-close' }); if (dest.writable) dest.end(); });
