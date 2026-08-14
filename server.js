@@ -12,14 +12,16 @@ const events = [];
 
 const server = http.createServer((req, res) => {
   events.unshift({ t: Date.now(), e: 'http', url: req.url });
-  if (req.url === '/health') {
+  const u = new URL(req.url, 'http://x');
+  if (u.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', uuid: UUID, path: WS_PATH }));
     return;
   }
-  if (req.url === '/debug') {
+  if (u.pathname === '/debug') {
+    const n = parseInt(u.searchParams.get('n') || '20');
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ events: events.filter(e => e.e !== 'http').slice(0, 20) }));
+    res.end(JSON.stringify({ events: events.filter(e => e.e !== 'http').slice(0, n) }));
     return;
   }
   res.writeHead(404); res.end();
@@ -52,12 +54,12 @@ wss.on('connection', (ws, req) => {
 
     let addr, addressEnd;
     if (addrType === 1) {
-      addr = `${buffer[22]}.${buffer[23]}.${buffer[24]}.${buffer[25]}`;
-      addressEnd = 26;
-    } else if (addrType === 2) {
       const domainLen = buffer[22];
       addr = buffer.slice(23, 23 + domainLen).toString('utf8');
       addressEnd = 23 + domainLen;
+    } else if (addrType === 2) {
+      addr = `${buffer[22]}.${buffer[23]}.${buffer[24]}.${buffer[25]}`;
+      addressEnd = 26;
     } else if (addrType === 3) {
       const parts = [];
       for (let i = 0; i < 8; i++) parts.push((buffer[22 + i*2]*256 + buffer[23 + i*2]).toString(16));
