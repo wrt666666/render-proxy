@@ -73,7 +73,7 @@ wss.on('connection', (ws, req) => {
     ws.removeListener('message', onMsg);
 
     events.unshift({ t: Date.now(), e: 'ok', target: addr + ':' + port, cmd: cmd });
-    ws.send(Buffer.from([version, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]), { binary: true });
+    ws.send(Buffer.from([version, 0x00]), { binary: true });
 
     events.unshift({ t: Date.now(), e: 'connecting' });
     const dest = net.connect(port, addr, () => {
