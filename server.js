@@ -13,6 +13,7 @@ let wsConnectCount = 0;
 let wsUpgradeCount = 0;
 
 const server = http.createServer((req, res) => {
+  wsUpgradeCount++;
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', uuid: UUID, path: WS_PATH, timestamp: new Date().toISOString() }));
