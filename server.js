@@ -19,7 +19,7 @@ const server = http.createServer((req, res) => {
   }
   if (req.url === '/debug') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ events: events.slice(0, 30) }));
+    res.end(JSON.stringify({ events: events.filter(e => e.e !== 'http').slice(0, 20) }));
     return;
   }
   res.writeHead(404); res.end();
