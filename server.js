@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const net = require('net');
 
 const PORT = process.env.PORT || 3000;
-const UUID = (process.env.UUID || crypto.randomUUID()).replace(/-/g, '');
+// OpenClash-configured UUID: b46b7b05-79d1-405c-b6f2-ce73e8ffbe48
+const UUID = 'b46b7b0579d1405cb6f2ce73e8ffbe48';
 const WS_PATH = process.env.WS_PATH || '/vless-ws';
 
 const serverUUID = Buffer.from(UUID, 'hex');
