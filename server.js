@@ -6,6 +6,20 @@ const proxy = httpProxy.createProxyServer({ ws: true });
 const PORT = process.env.PORT || 3000;
 const AUTH_TOKEN = process.env.AUTH_TOKEN || '';
 
+function getAuthToken(req) {
+  const auth = req.headers['authorization'];
+  if (!auth) return null;
+  if (auth.startsWith('Bearer ')) return auth.slice(7);
+  if (auth.startsWith('Basic ')) {
+    try {
+      const decoded = Buffer.from(auth.slice(6), 'base64').toString();
+      const parts = decoded.split(':');
+      return parts[1] || parts[0]; // password 或 username
+    } catch { return null; }
+  }
+  return null;
+}
+
 const server = http.createServer();
 
 server.on('request', (req, res) => {
@@ -23,9 +37,9 @@ server.on('request', (req, res) => {
 
   // 认证检查
   if (AUTH_TOKEN) {
-    const auth = req.headers['authorization'];
-    if (auth !== `Bearer ${AUTH_TOKEN}`) {
-      res.writeHead(401, { 'Content-Type': 'application/json' });
+    const token = getAuthToken(req);
+    if (token !== AUTH_TOKEN) {
+      res.writeHead(401, { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Basic realm="proxy"' });
       res.end(JSON.stringify({ error: 'Unauthorized' }));
       return;
     }
