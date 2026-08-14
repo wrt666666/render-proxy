@@ -21,9 +21,9 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (u.pathname === '/debug') {
-    const n = parseInt(u.searchParams.get('n') || '20');
+    const n = parseInt(u.searchParams.get('n') || '30');
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ events: events.filter(e => e.e !== 'http').slice(0, n) }));
+    res.end(JSON.stringify({ events: events.slice(0, n) }));
     return;
   }
   res.writeHead(404); res.end();
