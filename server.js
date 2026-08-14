@@ -48,17 +48,27 @@ wss.on('connection', (ws, req) => {
     const cmd = buffer[18];
     const port = buffer[19] * 256 + buffer[20];
     const addrType = buffer[21];
-    let addrLen = addrType === 1 ? 4 : (addrType === 3 ? 16 : 1 + buffer[22]);
-    const addrStart = addrType === 2 ? 23 : 22;
-    const addInfoStart = addrStart + addrLen;
-    if (buffer.length < addInfoStart + addInfoLen) return;
 
-    let addr;
-    if (addrType === 1) addr = buffer.slice(addrStart, addrStart + 4).join('.');
-    else if (addrType === 2) addr = buffer.slice(addrStart + 1, addrStart + 1 + buffer[22]).toString();
-    else addr = '[ipv6]';
+    let addr, addressEnd;
+    if (addrType === 1) {
+      addr = `${buffer[22]}.${buffer[23]}.${buffer[24]}.${buffer[25]}`;
+      addressEnd = 26;
+    } else if (addrType === 2) {
+      const domainLen = buffer[22];
+      addr = buffer.slice(23, 23 + domainLen).toString('utf8');
+      addressEnd = 23 + domainLen;
+    } else if (addrType === 3) {
+      const parts = [];
+      for (let i = 0; i < 8; i++) parts.push((buffer[22 + i*2]*256 + buffer[23 + i*2]).toString(16));
+      addr = parts.join(':');
+      addressEnd = 38;
+    } else {
+      events.unshift({ t: Date.now(), e: 'ERR-addrType' });
+      ws.close(1002); return;
+    }
+    if (buffer.length < addressEnd + addInfoLen) return;
 
-    const remaining = buffer.length > addInfoStart + addInfoLen ? buffer.slice(addInfoStart + addInfoLen) : null;
+    const remaining = buffer.length > addressEnd + addInfoLen ? buffer.slice(addressEnd + addInfoLen) : null;
     buffer = Buffer.alloc(0);
     ws.removeListener('message', onMsg);
 
