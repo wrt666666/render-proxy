@@ -1,0 +1,16 @@
+name: Render Keepalive
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render VLESS
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://proxy-burc.onrender.com/health)
+          echo "Render health: HTTP $code"
+          if [ "$code" != "200" ]; then
+            exit 1
+          fi
