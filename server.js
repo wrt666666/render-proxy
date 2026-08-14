@@ -12,8 +12,8 @@ const serverUUID = Buffer.from(UUID, 'hex');
 const events = [];
 
 const server = http.createServer((req, res) => {
-  const proto = req.socket && req.socket.getProtocol ? req.socket.getProtocol() : 'no-alpn-func';
-  events.unshift({ t: Date.now(), e: 'http', url: req.url, ua: req.headers['user-agent'], proto, upgrade: req.headers['upgrade'] });
+  const tlsInfo = req.socket && req.socket.getCipher ? { cipher: req.socket.getCipher() && req.socket.getCipher().name, protocol: req.socket.getProtocol && req.socket.getProtocol(), cipherVersion: req.socket.getCipher && req.socket.getCipher().version } : {};
+  events.unshift({ t: Date.now(), e: 'http', url: req.url, ua: req.headers['user-agent'], tls: tlsInfo, upgrade: req.headers['upgrade'], host: req.headers['host'] });
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
