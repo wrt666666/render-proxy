@@ -1,0 +1,42 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "port": 10808,
+      "protocol": "socks",
+      "sniffing": { "enabled": false }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "render",
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "proxy-burc.onrender.com",
+            "port": 443,
+            "users": [
+              { "id": "b46b7b05-79d1-405c-b6f2-ce73e8ffbe48", "encryption": "none" }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "tlsSettings": { "serverName": "proxy-burc.onrender.com" },
+        "wsSettings": {
+          "path": "/vless-ws",
+          "headers": { "Host": "proxy-burc.onrender.com" }
+        }
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      { "type": "field", "domain": ["google.com"], "outboundTag": "render" }
+    ]
+  }
+}
