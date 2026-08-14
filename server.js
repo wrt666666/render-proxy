@@ -8,11 +8,17 @@ const UUID = (process.env.UUID || crypto.randomUUID()).replace(/-/g, '');
 const WS_PATH = process.env.WS_PATH || '/vless-ws';
 
 const serverUUID = Buffer.from(UUID, 'hex');
+const recent = [];
 
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', uuid: UUID, path: WS_PATH, timestamp: new Date().toISOString() }));
+    return;
+  }
+  if (req.url === '/debug') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ recent }));
     return;
   }
   res.writeHead(404); res.end();
@@ -27,23 +33,24 @@ wss.on('connection', (ws, req) => {
 
   function onRaw(data) {
     buffer = Buffer.concat([buffer, data]);
-    // VLESS v4 wire format (verified against v2ray-core):
-    // version(1) + uuid(16) + addInfoLen(1) + cmd(1) + port(2) + addrType(1) + addr(var) + addInfo(addInfoLen)
+    // Log raw header hex for first 32 bytes on every connection
+    if (buffer.length >= 4 && recent.length < 20) {
+      recent.unshift({ ts: new Date().toISOString(), hex: buffer.slice(0, 32).toString('hex'), len: buffer.length });
+      console.log(`  raw hex (first 32): ${buffer.slice(0, 32).toString('hex')}`);
+    }
     if (buffer.length < 21) return;
 
     const version = buffer[0];
     for (let i = 0; i < 16; i++) {
       if (buffer[1 + i] !== serverUUID[i]) {
+        recent.unshift({ ts: new Date().toISOString(), hex: buffer.slice(0, 32).toString('hex'), len: buffer.length, err: 'uuid' });
         ws.close(1002, 'uuid mismatch');
-        console.log('  REJECT uuid mismatch');
         return;
       }
     }
-    console.log(`  version=${version} uuid=OK`);
 
     const addInfoLen = buffer[17];
     const cmd = buffer[18];
-    console.log(`  addInfoLen=${addInfoLen} cmd=${cmd}`);
 
     const portOffset = 19;
     if (buffer.length < portOffset + 2) return;
@@ -78,13 +85,10 @@ wss.on('connection', (ws, req) => {
     buffer = Buffer.alloc(0);
     ws.removeListener('data', onRaw);
 
-    console.log(`  ${addr}:${port}`);
-
+    console.log(`  ${addr}:${port} cmd=${cmd} ver=${version}`);
     ws.send(Buffer.from([version, 0x00, 0x00, 0x00, 0x00, 0x00]));
 
-    const dest = net.connect(port, addr, () => {
-      if (remaining && remaining.length > 0) dest.write(remaining);
-    });
+    const dest = net.connect(port, addr, () => { if (remaining && remaining.length > 0) dest.write(remaining); });
     dest.on('data', (c) => { if (ws.readyState === 1) ws.send(c, { binary: true }); });
     dest.on('end', () => { if (ws.readyState === 1) ws.close(); });
     dest.on('error', (e) => { console.error(`  dest err: ${e.message}`); ws.close(1011); });
@@ -95,8 +99,7 @@ wss.on('connection', (ws, req) => {
   }
 
   ws.on('data', onRaw);
+  ws.on('error', (e) => console.error('ws err:', e.message));
 });
 
-server.listen(PORT, () => {
-  console.log(`VLESS+WS port=${PORT} uuid=${UUID} path=${WS_PATH}`);
-});
+server.listen(PORT, () => { console.log(`VLESS+WS port=${PORT} uuid=${UUID} path=${WS_PATH}`); });
