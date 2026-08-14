@@ -80,8 +80,8 @@ wss.on('connection', (ws, req) => {
     buffer = Buffer.alloc(0);
     ws.removeListener('data', onHeader);
 
-    // VLESS response header: version(0) + response(0) + flags(0) + reserved(2) + security(0)
-    ws.send(Buffer.from([0, 0, 0, 0, 0, 0]));
+    // VLESS v4 response: version(0x04) + status(0x00) + flags(0x00) + reserved(2) + addon_len(0x00)
+    ws.send(Buffer.from([0x04, 0x00, 0x00, 0x00, 0x00, 0x00]));
 
     const dest = net.connect(port, addr, () => {
       if (remaining && remaining.length > 0) dest.write(remaining);
